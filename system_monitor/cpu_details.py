@@ -21,20 +21,6 @@ class CPUWorker(QObject):
         except:
             self.cpu_name = "Unknown CPU"
 
-        try:
-            self.l1_cache, self.l2_cache, self.l2_cache = 0, 0, 0
-            for cache in wmi.WMI().Win32_CacheMemory():
-                if(cache.Level == 3):
-                    self.l1_cache += cache.InstalledSize
-                elif(cache.Level == 4):
-                    self.l2_cache += cache.InstalledSize
-                elif(cache.Level == 5):
-                    self.l3_cache += cache.InstalledSize
-        except:
-            self.l1_cache = None
-            self.l2_cache = None
-            self.l3_cache = None
-
     def start_timer(self):
         # This will run in the worker thread context
         self.timer = QTimer(self)
@@ -70,9 +56,6 @@ class CPUWorker(QObject):
             "processes": process_count,
             "threads": thread_count,
             "uptime": uptime_str,
-            "L1_cache": self.l1_cache,
-            "L2_cache": self.l2_cache,
-            "L3_cache": self.l3_cache
         }
         self.data_updated.emit(usage, cpu_info)
 
@@ -150,11 +133,11 @@ class CPUMonitorWidget(QWidget):
         self.details_label.setWordWrap(True)
         layout.addWidget(self.details_label, 4, 0, 1, 2)
 
-        layout.setRowStretch(0, 0)   # top labels row small
-        layout.setRowStretch(1, 0)  # plot row large
-        layout.setRowStretch(2, 10)   # bottom labels small
-        layout.setRowStretch(3, 0)   # details label small
-        layout.setRowStretch(4, 0)
+        layout.setRowStretch(0, 0)   # main labels
+        layout.setRowStretch(1, 0)   # top labels row small
+        layout.setRowStretch(2, 0)   # plot row large
+        layout.setRowStretch(3, 0)   # bottom labels small
+        layout.setRowStretch(4, 0)   # details label small
 
     def update_ui(self, usage, cpu_info):
         self.cpu_usage_data = self.cpu_usage_data[1:] + [usage]
@@ -170,14 +153,6 @@ class CPUMonitorWidget(QWidget):
             f"<b>Threads:</b> {cpu_info['threads']}<br>"
             f"<b>Uptime:</b> {cpu_info['uptime']}<br>"
         )
-        if cpu_info["L1_cache"]:
-            details += (
-                f"<b>L1 Cache:</b> {cpu_info['l1_cache']}<br>"
-                f"<b>L2 Cache:</b> {cpu_info['l2_cache']}<br>"
-                f"<b>L3 Cache:</b> {cpu_info['l3_cache']}<br>"
-            )
-        else:
-            details += "<i>Install py-cpuinfo for cache info.</i>"
 
         self.details_label.setText(details)
 
