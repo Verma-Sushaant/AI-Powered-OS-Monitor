@@ -1,11 +1,13 @@
 import psutil
 import time
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
-from PyQt5.QtCore import QThread, pyqtSignal
+import wmi
+from PyQt5.QtWidgets import QWidget, QLabel, QGridLayout, QHBoxLayout, QSizePolicy
+from PyQt5.QtCore import QThread, pyqtSignal, Qt
 import pyqtgraph as pg
 
+
 class DiskMonitorThread(QThread):
-    update_signal = pyqtSignal(float, float)
+    update_signal = pyqtSignal(float, float, float, float, float)  # active, response, read, write, transfer in MB/s
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -20,11 +22,19 @@ class DiskMonitorThread(QThread):
 
             read_speed = (curr_disk.read_bytes - self.prev_disk.read_bytes) / interval / (1024 * 1024) if interval > 0 else 0
             write_speed = (curr_disk.write_bytes - self.prev_disk.write_bytes) / interval / (1024 * 1024) if interval > 0 else 0
+            transfer_rate = read_speed + write_speed
+
+            read_time_delta = curr_disk.read_time - self.prev_disk.read_time
+            write_time_delta = curr_disk.write_time - self.prev_disk.write_time
+            active_time = ((read_time_delta + write_time_delta) / (interval * 10))
+            active_time = min(max(active_time, 0), 100)
+
+            response_time = (read_time_delta + write_time_delta) / 2
 
             self.prev_disk = curr_disk
             self.prev_time = time.time()
 
-            self.update_signal.emit(read_speed, write_speed)
+            self.update_signal.emit(active_time, response_time, read_speed, write_speed, transfer_rate)
             self.msleep(1000)
 
     def stop(self):
@@ -33,43 +43,149 @@ class DiskMonitorThread(QThread):
         self.wait()
         self.deleteLater()
 
+
 class DiskMonitorWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        layout = QVBoxLayout(self)
+        self.disk = wmi.WMI().Win32_DiskDrive()[0]
 
-        self.disk_plot = pg.PlotWidget(title="Disk Read/Write Speed (MB/s)")
-        self.disk_plot.showGrid(x=True, y=True)
-        self.read_curve = self.disk_plot.plot(pen='y', name="Read Speed")
-        self.write_curve = self.disk_plot.plot(pen='r', name="Write Speed")
-        layout.addWidget(self.disk_plot)
+        self.active_data = [0] * 60
+        self.transfer_data = [0] * 60
+        self.x_start = 0
 
+        layout = QGridLayout(self)
+
+        # === Top Labels ===
+        top_label = QHBoxLayout()
+        self.left_label = QLabel("Disk")
+        self.left_label.setStyleSheet("color: white; font-size: 20pt;")
+        self.right_label = QLabel(self.disk.Model)
+        self.right_label.setStyleSheet("color: white; font-size: 12pt;")
+        top_label.addWidget(self.left_label, alignment=Qt.AlignLeft)
+        top_label.addWidget(self.right_label, alignment=Qt.AlignRight)
+        layout.addLayout(top_label, 0, 0, 1, 2)
+
+        # === Active Time Plot ===
+        top_labels_layout = QHBoxLayout()
+        self.top_left_label = QLabel("Active Time")
+        self.top_left_label.setStyleSheet("color: white; font-size: 10pt;")
+        self.top_right_label = QLabel("100%")
+        self.top_right_label.setStyleSheet("color: white; font-size: 10pt;")
+        top_labels_layout.addWidget(self.top_left_label, alignment=Qt.AlignLeft)
+        top_labels_layout.addWidget(self.top_right_label, alignment=Qt.AlignRight)
+        layout.addLayout(top_labels_layout, 1, 0, 1, 2)
+
+        self.active_plot = pg.PlotWidget()
+        self.active_plot.setBackground('#1C1C1C')
+        self.active_plot.setYRange(0, 100)
+        self.active_plot.setMouseEnabled(x=False, y=False)
+        self.active_plot.setMenuEnabled(False)
+        self.active_plot.getPlotItem().showGrid(x=True, y=True, alpha=0.7)
+        for axis in ['bottom', 'left', 'top', 'right']:
+            self.active_plot.getPlotItem().showAxis(axis, True)
+            self.active_plot.getPlotItem().getAxis(axis).setTicks([])
+        self.active_curve = self.active_plot.plot(pen=pg.mkPen('#00FF7F', width=2), fillLevel=0, brush=(0, 255, 127, 80))
+        self.active_plot.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.active_plot.setMinimumHeight(200)
+        layout.addWidget(self.active_plot, 2, 0, 1, 2)
+
+        x_label_layout = QHBoxLayout()
+        self.left_label = QLabel("60 seconds")
+        self.left_label.setStyleSheet("color: #E0E0E0; font-size: 10pt;")
+        self.right_label = QLabel("0")
+        self.right_label.setStyleSheet("color: #E0E0E0; font-size: 10pt;")
+        x_label_layout.addWidget(self.left_label, alignment=Qt.AlignLeft)
+        x_label_layout.addWidget(self.right_label, alignment=Qt.AlignRight)
+        layout.addLayout(x_label_layout, 3, 0, 1, 2)
+
+        x_label_layout = QHBoxLayout()
+        self.transfer_label = QLabel("Disk transfer rate")
+        self.transfer_label.setStyleSheet("color: #E0E0E0; font-size: 10pt;")
+        self.transfer_rate_label = QLabel()
+        self.transfer_rate_label.setStyleSheet("color: #E0E0E0; font-size: 10pt;")
+        x_label_layout.addWidget(self.transfer_label, alignment=Qt.AlignLeft)
+        x_label_layout.addWidget(self.transfer_rate_label, alignment=Qt.AlignRight)
+        layout.addLayout(x_label_layout, 4, 0, 1, 2)
+
+
+        # === Transfer Rate Plot ===
+        self.transfer_plot = pg.PlotWidget()
+        self.transfer_plot.setBackground('#1C1C1C')
+        self.transfer_plot.setMouseEnabled(x=False, y=False)
+        self.transfer_plot.setMenuEnabled(False)
+        self.transfer_plot.getPlotItem().showGrid(x=True, y=True, alpha=0.7)
+        for axis in ['bottom', 'left', 'top', 'right']:
+            self.transfer_plot.getPlotItem().showAxis(axis, True)
+            self.transfer_plot.getPlotItem().getAxis(axis).setTicks([])
+        self.transfer_curve = self.transfer_plot.plot(pen=pg.mkPen('#1E90FF', width=2), fillLevel=0, brush=(30, 144, 255, 80))
+        self.transfer_plot.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.transfer_plot.setMinimumHeight(150)
+        layout.addWidget(self.transfer_plot, 5, 0, 1, 2)
+
+        # === Bottom X-axis Label ===
+        x_label_layout = QHBoxLayout()
+        self.left_label = QLabel("60 seconds")
+        self.left_label.setStyleSheet("color: #E0E0E0; font-size: 10pt;")
+        self.right_label = QLabel("0")
+        self.right_label.setStyleSheet("color: #E0E0E0; font-size: 10pt;")
+        x_label_layout.addWidget(self.left_label, alignment=Qt.AlignLeft)
+        x_label_layout.addWidget(self.right_label, alignment=Qt.AlignRight)
+        layout.addLayout(x_label_layout, 6, 0, 1, 2)
+
+        # === Disk Info Label ===
         self.details_label = QLabel()
-        layout.addWidget(self.details_label)
+        self.details_label.setStyleSheet("color: #E0E0E0; font-size: 9pt;")
+        self.details_label.setWordWrap(True)
+        layout.addWidget(self.details_label, 7, 0, 1, 2)
 
-        self.read_data = [0] * 60
-        self.write_data = [0] * 60
+        layout.setRowStretch(0, 0)
+        layout.setRowStretch(1, 0)
+        layout.setRowStretch(2, 8)
+        layout.setRowStretch(3, 0)
+        layout.setRowStretch(4, 0)
+        layout.setRowStretch(5, 4)
 
         self.monitor_thread = DiskMonitorThread()
         self.monitor_thread.update_signal.connect(self.update_stats)
         self.monitor_thread.start()
 
-    def update_stats(self, read_speed, write_speed):
-        self.read_data = self.read_data[1:] + [read_speed]
-        self.write_data = self.write_data[1:] + [write_speed]
+    def update_stats(self, active_time, response_time, read_speed, write_speed, transfer_rate):
+        # Dynamically adjust unit
+        if transfer_rate < 1.0:
+            rate_display = f"{transfer_rate * 1024:.0f} KB/s"
+            graph_rate_value = transfer_rate * 1024  # Show in KB/s
+            self.transfer_plot.setYRange(0, 1024)
+        else:
+            rate_display = f"{transfer_rate:.2f} MB/s"
+            graph_rate_value = transfer_rate  # Show in MB/s
+            self.transfer_plot.setYRange(0, 10)
 
-        self.read_curve.setData(self.read_data)
-        self.write_curve.setData(self.write_data)
+        # Update data
+        self.active_data = self.active_data[1:] + [active_time]
+        self.transfer_data = self.transfer_data[1:] + [graph_rate_value]
+        x_values = list(range(len(self.active_data)))
+
+        self.active_curve.setData(x=x_values, y=self.active_data)
+        self.transfer_curve.setData(x=x_values, y=self.transfer_data)
+
+        # Update label
+        self.transfer_rate_label.setText(rate_display)
+
+        disk_type = "SSD" if "SSD" in self.disk.Model.upper() else "HDD"
+        read_display = f"{read_speed * 1024:.0f} KB/s" if read_speed < 1 else f"{read_speed:.2f} MB/s"
+        write_display = f"{write_speed * 1024:.0f} KB/s" if write_speed < 1 else f"{write_speed:.2f} MB/s"
 
         details = (
-            f"<b>Read Speed:</b> {read_speed:.2f} MB/s<br>"
-            f"<b>Write Speed:</b> {write_speed:.2f} MB/s"
+            f"<b>Disk:</b> {self.disk.Caption} ({disk_type})<br>"
+            f"<b>Active Time:</b> {active_time:.2f}%<br>"
+            f"<b>Response Time:</b> {response_time:.1f} ms<br>"
+            f"<b>Read Speed:</b> {read_display}<br>"
+            f"<b>Write Speed:</b> {write_display}<br>"
+            f"<b>Transfer Rate:</b> {rate_display}<br>"
+            f"<b>Capacity:</b> {int(self.disk.Size) / (1024 * 1024 * 1024):.2f} GB"
         )
         self.details_label.setText(details)
 
     def closeEvent(self, event):
         self.monitor_thread.stop()
-        self.monitor_thread.quit()
-        self.monitor_thread.wait()
-        self.monitor_thread.deleteLater()
         event.accept()
