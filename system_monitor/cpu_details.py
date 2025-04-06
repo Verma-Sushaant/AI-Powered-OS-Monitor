@@ -110,9 +110,9 @@ class CPUMonitorWidget(QWidget):
         # Add labels as QLabel on top of the plot
         top_labels_layout = QHBoxLayout()
         self.top_left_label = QLabel("% Utilization")
-        self.top_left_label.setStyleSheet("color: white; font-size: 10pt;")
+        self.top_left_label.setStyleSheet("color: white; font-size: 8pt;")
         self.top_right_label = QLabel("100%")
-        self.top_right_label.setStyleSheet("color: white; font-size: 10pt;")
+        self.top_right_label.setStyleSheet("color: white; font-size: 8pt;")
         top_labels_layout.addWidget(self.top_left_label, alignment=Qt.AlignLeft)
         top_labels_layout.addWidget(self.top_right_label, alignment=Qt.AlignRight)
         layout.addLayout(top_labels_layout, 1, 0, 1, 2)
@@ -138,9 +138,9 @@ class CPUMonitorWidget(QWidget):
         
         x_label_layout = QHBoxLayout()
         self.left_label = QLabel("60 seconds")
-        self.left_label.setStyleSheet("color: #E0E0E0; font-size: 10pt;")
+        self.left_label.setStyleSheet("color: #E0E0E0; font-size: 8pt;")
         self.right_label = QLabel("0")
-        self.right_label.setStyleSheet("color: #E0E0E0; font-size: 10pt;")
+        self.right_label.setStyleSheet("color: #E0E0E0; font-size: 8pt;")
         x_label_layout.addWidget(self.left_label, alignment=Qt.AlignLeft)  # Align left
         x_label_layout.addWidget(self.right_label, alignment=Qt.AlignRight) # Align right
         layout.addLayout(x_label_layout, 3, 0, 1, 2)
@@ -150,16 +150,17 @@ class CPUMonitorWidget(QWidget):
         self.details_label.setWordWrap(True)
         layout.addWidget(self.details_label, 4, 0, 1, 2)
 
-        layout.setRowStretch(0, 0)  
-        layout.setRowStretch(1, 0)  
-        layout.setRowStretch(2, 10)   
-        layout.setRowStretch(3, 0)   
+        layout.setRowStretch(0, 0)   # top labels row small
+        layout.setRowStretch(1, 0)  # plot row large
+        layout.setRowStretch(2, 10)   # bottom labels small
+        layout.setRowStretch(3, 0)   # details label small
         layout.setRowStretch(4, 0)
 
     def update_ui(self, usage, cpu_info):
         self.cpu_usage_data = self.cpu_usage_data[1:] + [usage]
         x_values = list(range(len(self.cpu_usage_data)))
         self.cpu_curve.setData(self.cpu_usage_data)
+        # f"<b>Processor:</b> {cpu_info['name']}<br>"
         freq = cpu_info["freq"]
         details = (
             f"<b>Utilization:</b> {cpu_info['utilization']}<br>"
@@ -175,6 +176,9 @@ class CPUMonitorWidget(QWidget):
                 f"<b>L2 Cache:</b> {cpu_info['l2_cache']}<br>"
                 f"<b>L3 Cache:</b> {cpu_info['l3_cache']}<br>"
             )
+        else:
+            details += "<i>Install py-cpuinfo for cache info.</i>"
+
         self.details_label.setText(details)
 
     def closeEvent(self, event):
