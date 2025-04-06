@@ -7,7 +7,7 @@ import pyqtgraph as pg
 
 
 class DiskMonitorThread(QThread):
-    update_signal = pyqtSignal(float, float, float, float, float)  # active, response, read, write, transfer in MB/s
+    update_signal = pyqtSignal(float, float, float, float)  # active, read, write, transfer in MB/s
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -24,18 +24,27 @@ class DiskMonitorThread(QThread):
             write_speed = (curr_disk.write_bytes - self.prev_disk.write_bytes) / interval / (1024 * 1024) if interval > 0 else 0
             transfer_rate = read_speed + write_speed
 
-            read_time_delta = curr_disk.read_time - self.prev_disk.read_time
-            write_time_delta = curr_disk.write_time - self.prev_disk.write_time
-            active_time = ((read_time_delta + write_time_delta) / (interval * 10))
-            active_time = min(max(active_time, 0), 100)
+            MAX_DISK_MBPS = 5000
+            read_delta = curr_disk.read_bytes - self.prev_disk.read_bytes
+            write_delta = curr_disk.write_bytes - self.prev_disk.write_bytes
+            interval = time.time() - self.prev_time
+            if interval == 0:
+                interval = 1
 
-            response_time = (read_time_delta + write_time_delta) / 2
+            read_speed = read_delta / interval / (1024 * 1024)
+            write_speed = write_delta / interval / (1024 * 1024)
+            transfer_rate = read_speed + write_speed
+
+            # Simulated Active Time as % of MAX speed
+            active_time = min((transfer_rate / MAX_DISK_MBPS) * 100, 100)
+
 
             self.prev_disk = curr_disk
             self.prev_time = time.time()
 
-            self.update_signal.emit(active_time, response_time, read_speed, write_speed, transfer_rate)
+            self.update_signal.emit(active_time, read_speed, write_speed, transfer_rate)
             self.msleep(1000)
+
 
     def stop(self):
         self.running = False
@@ -149,7 +158,7 @@ class DiskMonitorWidget(QWidget):
         self.monitor_thread.update_signal.connect(self.update_stats)
         self.monitor_thread.start()
 
-    def update_stats(self, active_time, response_time, read_speed, write_speed, transfer_rate):
+    def update_stats(self, active_time, read_speed, write_speed, transfer_rate):
         # Dynamically adjust unit
         if transfer_rate < 1.0:
             rate_display = f"{transfer_rate * 1024:.0f} KB/s"
@@ -171,17 +180,13 @@ class DiskMonitorWidget(QWidget):
         # Update label
         self.transfer_rate_label.setText(rate_display)
 
-        disk_type = "SSD" if "SSD" in self.disk.Model.upper() else "HDD"
         read_display = f"{read_speed * 1024:.0f} KB/s" if read_speed < 1 else f"{read_speed:.2f} MB/s"
         write_display = f"{write_speed * 1024:.0f} KB/s" if write_speed < 1 else f"{write_speed:.2f} MB/s"
 
         details = (
-            f"<b>Disk:</b> {self.disk.Caption} ({disk_type})<br>"
             f"<b>Active Time:</b> {active_time:.2f}%<br>"
-            f"<b>Response Time:</b> {response_time:.1f} ms<br>"
             f"<b>Read Speed:</b> {read_display}<br>"
             f"<b>Write Speed:</b> {write_display}<br>"
-            f"<b>Transfer Rate:</b> {rate_display}<br>"
             f"<b>Capacity:</b> {int(self.disk.Size) / (1024 * 1024 * 1024):.2f} GB"
         )
         self.details_label.setText(details)
