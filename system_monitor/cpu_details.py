@@ -16,13 +16,11 @@ class CPUWorker(QObject):
         self.interval = interval
         self.timer = None
         try:
-            # c = wmi.WMI()
             self.cpu_name = wmi.WMI().Win32_Processor()[0].Name
         except:
             self.cpu_name = "Unknown CPU"
 
     def start_timer(self):
-        # This will run in the worker thread context
         self.timer = QTimer(self)
         self.timer.setInterval(self.interval)
         self.timer.timeout.connect(self.collect_data)
@@ -124,30 +122,27 @@ class CPUMonitorWidget(QWidget):
         self.left_label.setStyleSheet("color: #E0E0E0; font-size: 8pt;")
         self.right_label = QLabel("0")
         self.right_label.setStyleSheet("color: #E0E0E0; font-size: 8pt;")
-        x_label_layout.addWidget(self.left_label, alignment=Qt.AlignLeft)  # Align left
-        x_label_layout.addWidget(self.right_label, alignment=Qt.AlignRight) # Align right
+        x_label_layout.addWidget(self.left_label, alignment=Qt.AlignLeft)  
+        x_label_layout.addWidget(self.right_label, alignment=Qt.AlignRight) 
         layout.addLayout(x_label_layout, 3, 0, 1, 2)
 
         self.details_label = QLabel()
-        self.details_label.setStyleSheet("color: #E0E0E0; font-size: 9pt;")
+        self.details_label.setStyleSheet("color: #E0E0E0; font-size: 10pt;")
         self.details_label.setWordWrap(True)
         layout.addWidget(self.details_label, 4, 0, 1, 2)
 
-        layout.setRowStretch(0, 0)   # main labels
-        layout.setRowStretch(1, 0)   # top labels row small
-        layout.setRowStretch(2, 0)   # plot row large
-        layout.setRowStretch(3, 0)   # bottom labels small
-        layout.setRowStretch(4, 0)   # details label small
+        layout.setRowStretch(0, 0)  
+        layout.setRowStretch(1, 0)  
+        layout.setRowStretch(2, 8)   
+        layout.setRowStretch(3, 0)   
+        layout.setRowStretch(4, 0)
 
     def update_ui(self, usage, cpu_info):
         self.cpu_usage_data = self.cpu_usage_data[1:] + [usage]
         x_values = list(range(len(self.cpu_usage_data)))
         self.cpu_curve.setData(self.cpu_usage_data)
-        # f"<b>Processor:</b> {cpu_info['name']}<br>"
-        freq = cpu_info["freq"]
         details = (
             f"<b>Utilization:</b> {cpu_info['utilization']}<br>"
-            f"<b>CPU Frequency:</b> {freq.current:.2f} MHz (Min: {freq.min}, Max: {freq.max})<br>"
             f"<b>Cores:</b> Physical: {cpu_info['physical_cores']}, Logical: {cpu_info['logical_cores']}<br>"
             f"<b>Processes:</b> {cpu_info['processes']}<br>"
             f"<b>Threads:</b> {cpu_info['threads']}<br>"
@@ -162,4 +157,3 @@ class CPUMonitorWidget(QWidget):
         self.worker_thread.wait()
         self.worker.deleteLater()
         event.accept()
-
