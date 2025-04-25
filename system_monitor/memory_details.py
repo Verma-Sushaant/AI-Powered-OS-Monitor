@@ -85,7 +85,7 @@ class MemoryMonitorWidget(QWidget):
 
         # Details label
         self.details_label = QLabel()
-        self.details_label.setStyleSheet("color: #E0E0E0; font-size: 9pt;")
+        self.details_label.setStyleSheet("color: #E0E0E0; font-size: 10pt;")
         self.details_label.setWordWrap(True)
         layout.addWidget(self.details_label, 4, 0, 1, 2)
 
