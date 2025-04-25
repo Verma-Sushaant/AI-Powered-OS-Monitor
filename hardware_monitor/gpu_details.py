@@ -114,11 +114,20 @@ class GPUMonitorWidget(QWidget):
         self.gpu_mem_plot.setMinimumHeight(200)
         layout.addWidget(self.gpu_mem_plot, 5, 0, 1, 2)
 
+        bottom_label_layout = QHBoxLayout()
+        self.bottom_left_label = QLabel("60 seconds")
+        self.bottom_left_label.setStyleSheet("color: #E0E0E0; font-size: 8pt;")
+        self.bottom_right_label = QLabel("0")
+        self.bottom_right_label.setStyleSheet("color: #E0E0E0; font-size: 8pt;")
+        bottom_label_layout.addWidget(self.bottom_left_label, alignment=Qt.AlignLeft)
+        bottom_label_layout.addWidget(self.bottom_right_label, alignment=Qt.AlignRight)
+        layout.addLayout(bottom_label_layout, 6, 0, 1, 2)
+
         # Details label
         self.details_label = QLabel()
-        self.details_label.setStyleSheet("color: #E0E0E0; font-size: 9pt;")
+        self.details_label.setStyleSheet("color: #E0E0E0; font-size: 10pt;")
         self.details_label.setWordWrap(True)
-        layout.addWidget(self.details_label, 6, 0, 1, 2)
+        layout.addWidget(self.details_label, 7, 0, 1, 2)
 
         layout.setRowStretch(0, 0)
         layout.setRowStretch(1, 0)
@@ -127,6 +136,7 @@ class GPUMonitorWidget(QWidget):
         layout.setRowStretch(4, 0)
         layout.setRowStretch(5, 5)
         layout.setRowStretch(6, 0)
+        layout.setRowStretch(7, 0)
 
         # Worker
         self.worker = GPUWorker()
